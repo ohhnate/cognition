@@ -1,0 +1,58 @@
+# Set default behavior to automatically normalize line endings.
+* text=auto
+
+# Source code
+*.c text
+*.h text
+*.cpp text
+*.hpp text
+
+# CMake
+CMakeLists.txt text
+*.cmake text
+
+# Scripts
+*.sh text eol=lf
+*.bat text eol=crlf
+
+# VS Code files
+.vscode/*.json text
+
+# Docs
+*.md text
+LICENSE text
+*.txt text
+
+# Configs
+.gitattributes text
+.gitignore text
+.editorconfig text
+
+# Graphics
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Audio
+*.wav binary
+*.mp3 binary
+*.ogg binary
+
+# Fonts
+*.ttf binary
+*.otf binary
+
+# Exclude files from exporting
+.gitattributes export-ignore
+.gitignore export-ignore
+
+# Mark generated files
+build/** -diff -merge
+*.o binary
+*.exe binary
+
+# Linguist overrides
+*.h linguist-language=C
+CMakeLists.txt linguist-language=CMake

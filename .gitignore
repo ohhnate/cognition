@@ -1,0 +1,18 @@
+# Build output
+build/
+*.o
+*.exe
+
+# VS Code settings
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# SDL library files (if you're not including them in version control)
+lib/SDL2/
+
+# Temporary files
+*.tmp
+*.swp
