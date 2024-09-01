@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#define MAX_CONFIG_ENTRIES 100
+#define MAX_CONFIG_ENTRIES 256
 #define MAX_KEY_LENGTH 64
 #define MAX_VALUE_LENGTH 256
 

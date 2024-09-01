@@ -1,4 +1,3 @@
-// resource_manager.h
 #ifndef RESOURCE_MANAGER_H
 #define RESOURCE_MANAGER_H
 

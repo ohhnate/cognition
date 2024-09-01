@@ -55,25 +55,25 @@ void physics_world_update(PhysicsWorld* world) {
     // Check and resolve collisions
     for (int i = 0; i < world->body_count; i++) {
         for (int j = i + 1; j < world->body_count; j++) {
-            if (physics_check_collision(world->bodies[i], world->bodies[j])) {
-                physics_resolve_collision(world->bodies[i], world->bodies[j]);
+            if (check_collision(world->bodies[i], world->bodies[j])) {
+                resolve_collision(world->bodies[i], world->bodies[j]);
             }
         }
     }
 }
 
-void physics_apply_force(PhysicsBody* body, Vector2D force) {
+void apply_force(PhysicsBody* body, Vector2D force) {
     if (!body->is_static) {
         body->acceleration.x += force.x / body->mass;
         body->acceleration.y += force.y / body->mass;
     }
 }
 
-bool physics_check_collision(PhysicsBody* a, PhysicsBody* b) {
+bool check_collision(PhysicsBody* a, PhysicsBody* b) {
     return SDL_HasIntersection(&a->collider, &b->collider);
 }
 
-void physics_resolve_collision(PhysicsBody* a, PhysicsBody* b) {
+void resolve_collision(PhysicsBody* a, PhysicsBody* b) {
     // Simple collision response
     if (!a->is_static && !b->is_static) {
         // Calculate relative velocity

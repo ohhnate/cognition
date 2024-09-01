@@ -29,6 +29,11 @@ typedef struct {
 #define DEG_TO_RAD (PI / 180.0f)
 #define RAD_TO_DEG (180.0f / PI)
 
+// ECS Constants
+#define MAX_ENTITIES 100000
+#define MAX_COMPONENTS 256
+#define MAX_SYSTEMS 256
+
 // Utility macros
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))

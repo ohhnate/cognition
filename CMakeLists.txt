@@ -17,6 +17,8 @@ set(SDL2_IMAGE_INCLUDE_DIR "${SDL2_IMAGE_DIR}/include")
 file(GLOB_RECURSE SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/core/modules/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/core/modules/*/*.c"
 )
 
 # Add executable
@@ -26,6 +28,7 @@ add_executable(cognition ${SOURCES})
 target_include_directories(cognition PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/modules
     ${SDL2_INCLUDE_DIR}
     ${SDL2_IMAGE_INCLUDE_DIR}
 )
