@@ -19,6 +19,7 @@ typedef struct CognitionEngine {
     int is_running;
 } CognitionEngine;
 
+// Engine lifecycle functions
 int cognition_init(CognitionEngine* engine, const char* title, int width, int height);
 void cognition_run(CognitionEngine* engine);
 void cognition_shutdown(CognitionEngine* engine);

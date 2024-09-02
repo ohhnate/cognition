@@ -1,6 +1,8 @@
 #include "physics.h"
-#include <stdlib.h>
+#include "core/modules/utils/memory_manager.h"
+#include "core/modules/utils/error_handling.h"
 #include <math.h>
+#include <stdlib.h>
 
 void physics_world_init(PhysicsWorld* world) {
     world->body_count = 0;
@@ -9,14 +11,21 @@ void physics_world_init(PhysicsWorld* world) {
     for (int i = 0; i < MAX_ENTITIES; i++) {
         world->bodies[i] = NULL;
     }
+    cog_log_info("Physics world initialized");
 }
 
 int physics_body_create(PhysicsWorld* world, float x, float y, float width, float height, float mass, bool is_static) {
     if (world->body_count >= MAX_ENTITIES) {
+        cog_log_error("Maximum number of physics bodies reached");
         return -1;
     }
 
-    PhysicsBody* body = malloc(sizeof(PhysicsBody));
+    PhysicsBody* body = COG_NEW(PhysicsBody);
+    if (body == NULL) {
+        cog_log_error("Failed to allocate memory for physics body");
+        return -1;
+    }
+
     body->position = (Vector2D){x, y};
     body->velocity = (Vector2D){0, 0};
     body->acceleration = (Vector2D){0, 0};
@@ -25,6 +34,7 @@ int physics_body_create(PhysicsWorld* world, float x, float y, float width, floa
     body->is_static = is_static;
 
     world->bodies[world->body_count] = body;
+    cog_log_debug("Physics body created at position (%f, %f)", x, y);
     return world->body_count++;
 }
 
@@ -115,8 +125,17 @@ void resolve_collision(PhysicsBody* a, PhysicsBody* b) {
 }
 
 void physics_world_cleanup(PhysicsWorld* world) {
+    if (world == NULL) {
+        cog_log_error("Attempted to clean up NULL physics world");
+        return;
+    }
+
     for (int i = 0; i < world->body_count; i++) {
-        free(world->bodies[i]);
+        if (world->bodies[i] != NULL) {
+            COG_DELETE(world->bodies[i]);
+            world->bodies[i] = NULL;
+        }
     }
     world->body_count = 0;
+    cog_log_info("Physics world cleaned up: %d bodies freed", world->body_count);
 }

@@ -1,25 +1,31 @@
 #include "config_manager.h"
-#include <stdio.h>
+#include "core/modules/utils/memory_manager.h"
+#include "core/modules/utils/error_handling.h"
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
+
 
 void config_manager_init(ConfigManager* manager) {
     manager->count = 0;
+    cog_log_info("Config manager initialized");
 }
 
 bool config_manager_load_from_file(ConfigManager* manager, const char* filename) {
     FILE* file = fopen(filename, "r");
-    if (!file) return false;
+    if (!file) {
+        cog_log_error("Failed to open config file: %s", filename);
+        return false;
+    }
 
-    char line[MAX_KEY_LENGTH + MAX_VALUE_LENGTH + 2];  // +2 for '=' and '\0'
+    char line[MAX_KEY_LENGTH + MAX_VALUE_LENGTH + 2];
     while (fgets(line, sizeof(line), file) && manager->count < MAX_CONFIG_ENTRIES) {
         char* equals = strchr(line, '=');
         if (equals) {
-            *equals = '\0';  // Split the line at '='
+            *equals = '\0';
             char* key = line;
             char* value = equals + 1;
             
-            // Remove newline from value if present
             char* newline = strchr(value, '\n');
             if (newline) *newline = '\0';
 
@@ -28,6 +34,7 @@ bool config_manager_load_from_file(ConfigManager* manager, const char* filename)
     }
 
     fclose(file);
+    cog_log_info("Config loaded from file: %s", filename);
     return true;
 }
 

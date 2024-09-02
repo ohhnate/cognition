@@ -1,23 +1,37 @@
-#include "ecs.h"
+#include "core/ecs.h"
+#include "core/modules/utils/memory_manager.h"
+#include "core/modules/utils/error_handling.h"
 #include <string.h>
 #include <stdio.h>
 
 ECSResult ecs_init(ECS* ecs) {
-    if (ecs == NULL) return ECS_ERROR_NULL_POINTER;
+    if (ecs == NULL) {
+        cog_log_error("ECS pointer is NULL");
+        return ECS_ERROR_NULL_POINTER;
+    }
     memset(ecs, 0, sizeof(ECS));
+    cog_log_info("ECS initialized successfully");
     return ECS_OK;
 }
 
 ECSResult create_entity(ECS* ecs, Entity** out_entity) {
-    if (ecs == NULL || out_entity == NULL) return ECS_ERROR_NULL_POINTER;
-    if ((unsigned int)ecs->entity_count >= MAX_ENTITIES) return ECS_ERROR_INVALID_ENTITY;
+    if (ecs == NULL || out_entity == NULL) {
+        cog_log_error("Invalid parameters in create_entity");
+        return ECS_ERROR_NULL_POINTER;
+    }
+    if (ecs->entity_count >= MAX_ENTITIES) {
+        cog_log_error("Maximum entity count reached");
+        return ECS_ERROR_INVALID_ENTITY;
+    }
     
     Entity* entity = &ecs->entities[ecs->entity_count];
-    entity->id = (uint32_t)ecs->entity_count;
+    entity->id = ecs->entity_count;
     ecs->entity_count++;
     *out_entity = entity;
+    cog_log_debug("Entity created with ID: %d", entity->id);
     return ECS_OK;
 }
+
 ECSResult add_component(ECS* ecs, Entity* entity, Component component) {
     if (ecs == NULL || entity == NULL) return ECS_ERROR_NULL_POINTER;
     if (entity->id >= (uint32_t)ecs->entity_count) return ECS_ERROR_INVALID_ENTITY;

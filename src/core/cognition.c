@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <SDL.h>
 #include <SDL_image.h>
-#include "cognition.h"
+#include "core/cognition.h"
+#include "core/modules/utils/memory_manager.h"
+#include "core/modules/utils/error_handling.h"
 #include "modules/graphics/renderer.h"
 #include "modules/graphics/render_system.h"
 #include "modules/resource/resource_manager.h"
@@ -13,79 +15,107 @@
 #include "modules/physics/physics_components.h"
 #include "modules/graphics/render_components.h"
 
-int cognition_init(CognitionEngine* engine, const char* title, int width, int height) {
-    printf("Initializing Cognition Engine...\n");
+static int init_sdl_and_window(CognitionEngine* engine, const char* title, int width, int height) {
+    cog_log_info("Initializing SDL and creating window...");
 
-    // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
-        printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
+        cog_log_error("SDL could not initialize! SDL_Error: %s", SDL_GetError());
         return 0;
     }
-    printf("SDL initialized successfully.\n");
 
-    // Initialize SDL_image
     int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
     if (!(IMG_Init(imgFlags) & imgFlags)) {
-        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
+        cog_log_error("SDL_image could not initialize! SDL_image Error: %s", IMG_GetError());
         SDL_Quit();
         return 0;
     }
-    printf("SDL_image initialized successfully.\n");
 
-    // Create window
     engine->window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_SHOWN);
     if (engine->window == NULL) {
-        printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
+        cog_log_error("Window could not be created! SDL_Error: %s", SDL_GetError());
         IMG_Quit();
         SDL_Quit();
         return 0;
     }
-    printf("Window created successfully.\n");
 
-    // Initialize renderer
-    engine->renderer = malloc(sizeof(Renderer));
+    cog_log_info("SDL initialized and window created successfully.");
+    return 1;
+}
+
+static int init_renderer(CognitionEngine* engine) {
+    cog_log_info("Initializing renderer...");
+
+    engine->renderer = COG_NEW(Renderer);
+    if (!engine->renderer) {
+        cog_log_error("Failed to allocate memory for renderer");
+        return 0;
+    }
+
     if (!renderer_init(engine->renderer, engine->window)) {
-        printf("Renderer could not be initialized!\n");
-        SDL_DestroyWindow(engine->window);
-        IMG_Quit();
-        SDL_Quit();
+        cog_log_error("Renderer could not be initialized!");
+        COG_DELETE(engine->renderer);
         return 0;
     }
-    printf("Renderer initialized successfully.\n");
 
-    // Initialize resource manager
-    engine->resource_manager = malloc(sizeof(ResourceManager));
+    cog_log_info("Renderer initialized successfully.");
+    return 1;
+}
+
+static int init_resource_manager(CognitionEngine* engine) {
+    cog_log_info("Initializing resource manager...");
+
+    engine->resource_manager = COG_NEW(ResourceManager);
+    if (!engine->resource_manager) {
+        cog_log_error("Failed to allocate memory for resource manager");
+        return 0;
+    }
+
     resource_manager_init(engine->resource_manager, engine->renderer->sdl_renderer);
-    printf("Resource manager initialized.\n");
 
-    // Load test sprite
     if (!resource_manager_load_image(engine->resource_manager, "test_sprite", "../assets/test_sprite.png")) {
-        printf("Failed to load test sprite!\n");
-        renderer_cleanup(engine->renderer);
-        free(engine->renderer);
-        SDL_DestroyWindow(engine->window);
-        IMG_Quit();
-        SDL_Quit();
+        cog_log_error("Failed to load test sprite!");
         return 0;
     }
-    printf("Successfully loaded test sprite.\n");
 
-    // Initialize input manager
-    engine->input_manager = malloc(sizeof(InputManager));
+    cog_log_info("Resource manager initialized and test sprite loaded successfully.");
+    return 1;
+}
+
+static int init_subsystems(CognitionEngine* engine) {
+    cog_log_info("Initializing subsystems...");
+
+    engine->input_manager = COG_NEW(InputManager);
+    if (!engine->input_manager) {
+        cog_log_error("Failed to allocate memory for input manager");
+        return 0;
+    }
     input_manager_init(engine->input_manager);
-    printf("Input manager initialized.\n");
 
-    // Initialize physics world
-    engine->physics_world = malloc(sizeof(PhysicsWorld));
+    engine->physics_world = COG_NEW(PhysicsWorld);
+    if (!engine->physics_world) {
+        cog_log_error("Failed to allocate memory for physics world");
+        return 0;
+    }
     physics_world_init(engine->physics_world);
-    printf("Physics world initialized.\n");
 
-    // Initialize ECS
-    engine->ecs = malloc(sizeof(ECS));
-    ecs_init(engine->ecs);
-    printf("ECS initialized.\n");
+    cog_log_info("Subsystems initialized successfully.");
+    return 1;
+}
 
-    // Initialize ECS systems
+static int init_ecs(CognitionEngine* engine) {
+    cog_log_info("Initializing ECS...");
+
+    engine->ecs = COG_NEW(ECS);
+    if (!engine->ecs) {
+        cog_log_error("Failed to allocate memory for ECS");
+        return 0;
+    }
+
+    if (ecs_init(engine->ecs) != ECS_OK) {
+        cog_log_error("Failed to initialize ECS");
+        return 0;
+    }
+
     System transform_sys = {transform_system, {COMPONENT_TRANSFORM}, 1};
     System physics_sys = {physics_system, {COMPONENT_TRANSFORM, COMPONENT_PHYSICS}, 2};
     System render_sys = {render_system, {COMPONENT_TRANSFORM, COMPONENT_RENDER}, 2};
@@ -93,119 +123,142 @@ int cognition_init(CognitionEngine* engine, const char* title, int width, int he
     add_system(engine->ecs, transform_sys);
     add_system(engine->ecs, physics_sys);
     add_system(engine->ecs, render_sys);
-    printf("ECS systems added.\n");
 
-    // Create a test entity
-    Entity* test_entity = NULL;
-    ECSResult result = create_entity(engine->ecs, &test_entity);
-    if (result != ECS_OK || test_entity == NULL) {
-        printf("Failed to create test entity! Error code: %d\n", result);
-        cognition_shutdown(engine);
-        return 0;
-    }
-
-    // Add transform component
-    Component transform_component = create_transform_component((Vector2){100, 100}, 0, (Vector2){1, 1});
-    result = add_component(engine->ecs, test_entity, transform_component);
-    if (result != ECS_OK) {
-        printf("Failed to add transform component! Error code: %d\n", result);
-        cognition_shutdown(engine);
-        return 0;
-    }
-
-    // // Add physics component
-    // Vector2D initial_position = {100, 100};
-    // Vector2D initial_velocity = {0, 0};
-    // Vector2D initial_acceleration = {0, 9.8f};
-    // Component physics_component = create_physics_component(initial_position, initial_velocity, initial_acceleration, 1.0f, false);
-    // result = ecs_add_component(engine->ecs, test_entity, physics_component);
-    // if (result != ECS_OK) {
-    //     printf("Failed to add physics component! Error code: %d\n", result);
-    //     cognition_shutdown(engine);
-    //     return 0;
-    // }
-
-    // Add render component
-    Component render_component = create_render_component("test_sprite");
-    result = add_component(engine->ecs, test_entity, render_component);
-    if (result != ECS_OK) {
-        printf("Failed to add render component! Error code: %d\n", result);
-        cognition_shutdown(engine);
-        return 0;
-    }
-
-    printf("Created test entity with transform and render components.\n");
-
-    // Set running flag
-    engine->is_running = 1;
-    printf("Engine is_running set to %d\n", engine->is_running);
-
-    printf("Cognition Engine initialized successfully.\n");
+    cog_log_info("ECS initialized and systems added successfully.");
     return 1;
 }
 
-void cognition_run(CognitionEngine* engine) {
+static int create_test_entity(CognitionEngine* engine) {
+    cog_log_info("Creating test entity...");
+
+    Entity* test_entity = NULL;
+    ECSResult result = create_entity(engine->ecs, &test_entity);
+    if (result != ECS_OK || test_entity == NULL) {
+        cog_log_error("Failed to create test entity! Error code: %d", result);
+        return 0;
+    }
+
+    Component transform_component = create_transform_component((Vector2){100, 100}, 0, (Vector2){1, 1});
+    result = add_component(engine->ecs, test_entity, transform_component);
+    if (result != ECS_OK) {
+        cog_log_error("Failed to add transform component! Error code: %d", result);
+        return 0;
+    }
+
+    Component render_component = create_render_component("test_sprite");
+    result = add_component(engine->ecs, test_entity, render_component);
+    if (result != ECS_OK) {
+        cog_log_error("Failed to add render component! Error code: %d", result);
+        return 0;
+    }
+
+    cog_log_info("Test entity created successfully with transform and render components.");
+    return 1;
+}
+
+int cognition_init(CognitionEngine* engine, const char* title, int width, int height) {
+    cog_log_info("Initializing Cognition Engine...");
+
+    if (!init_sdl_and_window(engine, title, width, height)) return 0;
+    if (!init_renderer(engine)) return 0;
+    if (!init_resource_manager(engine)) return 0;
+    if (!init_subsystems(engine)) return 0;
+    if (!init_ecs(engine)) return 0;
+    if (!create_test_entity(engine)) return 0;
+
+    engine->is_running = 1;
+    cog_log_info("Cognition Engine initialized successfully.");
+    return 1;
+}
+
+static void handle_events(CognitionEngine* engine) {
     SDL_Event e;
-    int frame_count = 0;
-    printf("Entering main loop\n");
-    while (engine->is_running) {
-        printf("Frame %d start\n", frame_count);
-
-        // Handle events
-        while (SDL_PollEvent(&e) != 0) {
-            if (e.type == SDL_QUIT) {
-                engine->is_running = 0;
-                printf("Quit event received\n");
-            }
-            input_manager_handle_event(engine->input_manager, &e);
-        }
-       
-        // Update input
-        input_manager_update(engine->input_manager);
-        printf("Input updated\n");
-       
-        // Update ECS
-        ECSResult result = ecs_update(engine->ecs, engine);
-        if (result != ECS_OK) {
-            printf("ECS update failed with error code: %d\n", result);
+    while (SDL_PollEvent(&e) != 0) {
+        if (e.type == SDL_QUIT) {
             engine->is_running = 0;
-            break;
+            cog_log_info("Quit event received");
         }
-        printf("ECS updated\n");
-       
-        // Render
-        SDL_Color clear_color = {0, 0, 0, 255}; // Black
-        clear(engine->renderer, clear_color);
-        printf("Renderer cleared\n");
+        input_manager_handle_event(engine->input_manager, &e);
+    }
+}
 
-        // Render ECS entities
-        render_entities(engine->renderer, engine->ecs, engine);
-        printf("Entities rendered\n");
+static void update_game_state(CognitionEngine* engine) {
+    input_manager_update(engine->input_manager);
+    
+    ECSResult result = ecs_update(engine->ecs, engine);
+    if (result != ECS_OK) {
+        cog_log_error("ECS update failed with error code: %d", result);
+        engine->is_running = 0;
+    }
+}
 
-        present(engine->renderer);
-        printf("Renderer presented\n");
+static void render_frame(CognitionEngine* engine) {
+    SDL_Color clear_color = {0, 0, 0, 255}; // Black
+    clear(engine->renderer, clear_color);
+
+    render_entities(engine->renderer, engine->ecs, engine);
+
+    present(engine->renderer);
+}
+
+void cognition_run(CognitionEngine* engine) {
+    cog_log_info("Entering main game loop");
+    int frame_count = 0;
+
+    while (engine->is_running) {
+        cog_log_debug("Frame %d start", frame_count);
+
+        handle_events(engine);
+        update_game_state(engine);
+        render_frame(engine);
 
         frame_count++;
-        
         SDL_Delay(16);  // Roughly 60 FPS
 
-        printf("Frame %d end. is_running: %d\n", frame_count, engine->is_running);
+        cog_log_debug("Frame %d end. is_running: %d", frame_count, engine->is_running);
     }
-    printf("Exiting main loop\n");
+
+    cog_log_info("Exiting main game loop");
+}
+
+static void cleanup_subsystems(CognitionEngine* engine) {
+    if (engine->ecs) {
+        ecs_cleanup(engine->ecs);
+        COG_DELETE(engine->ecs);
+    }
+
+    if (engine->resource_manager) {
+        resource_manager_cleanup(engine->resource_manager);
+        COG_DELETE(engine->resource_manager);
+    }
+
+    if (engine->renderer) {
+        renderer_cleanup(engine->renderer);
+        COG_DELETE(engine->renderer);
+    }
+
+    if (engine->input_manager) {
+        input_manager_cleanup(engine->input_manager);
+        COG_DELETE(engine->input_manager);
+    }
+
+    if (engine->physics_world) {
+        physics_world_cleanup(engine->physics_world);
+        COG_DELETE(engine->physics_world);
+    }
 }
 
 void cognition_shutdown(CognitionEngine* engine) {
-    ecs_cleanup(engine->ecs);
-    free(engine->ecs);
-    resource_manager_cleanup(engine->resource_manager);
-    free(engine->resource_manager);
-    renderer_cleanup(engine->renderer);
-    free(engine->renderer);
-    input_manager_cleanup(engine->input_manager);
-    free(engine->input_manager);
-    physics_world_cleanup(engine->physics_world);
-    free(engine->physics_world);
-    SDL_DestroyWindow(engine->window);
+    cog_log_info("Shutting down Cognition Engine...");
+
+    cleanup_subsystems(engine);
+
+    if (engine->window) {
+        SDL_DestroyWindow(engine->window);
+    }
+
     IMG_Quit();
     SDL_Quit();
+
+    cog_log_info("Cognition Engine shut down successfully.");
 }

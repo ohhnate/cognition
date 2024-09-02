@@ -1,4 +1,6 @@
-#include "resource_manager.h"
+#include "core/modules/resource/resource_manager.h"
+#include "core/modules/utils/memory_manager.h"
+#include "core/modules/utils/error_handling.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -9,6 +11,7 @@ void resource_manager_init(ResourceManager* manager, SDL_Renderer* renderer) {
         manager->images[i].key = NULL;
         manager->images[i].texture = NULL;
     }
+    cog_log_info("Resource manager initialized");
 }
 
 SDL_Texture* resource_manager_load_image(ResourceManager* manager, const char* key, const char* file_path) {
@@ -27,7 +30,7 @@ SDL_Texture* resource_manager_load_image(ResourceManager* manager, const char* k
 
     SDL_Texture* texture = SDL_CreateTextureFromSurface(manager->renderer, loaded_surface);
     if (texture == NULL) {
-        printf("Unable to create texture from %s! SDL Error: %s\n", file_path, SDL_GetError());
+        cog_log_error("Unable to create texture from %s! SDL Error: %s", file_path, SDL_GetError());
         SDL_FreeSurface(loaded_surface);
         return NULL;
     }

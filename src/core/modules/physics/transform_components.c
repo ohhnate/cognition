@@ -1,9 +1,12 @@
 #include "transform_components.h"
+#include "core/modules/utils/memory_manager.h"
+#include "core/modules/utils/error_handling.h"
 #include <stdlib.h>
 
 Component create_transform_component(Vector2 position, float rotation, Vector2 scale) {
-    Transform* data = malloc(sizeof(Transform));
+    Transform* data = COG_NEW(Transform);
     if (data == NULL) {
+        cog_log_error("Failed to allocate memory for transform component");
         Component null_component = {COMPONENT_TRANSFORM, NULL};
         return null_component;
     }
@@ -14,6 +17,7 @@ Component create_transform_component(Vector2 position, float rotation, Vector2 s
         .type = COMPONENT_TRANSFORM,
         .data = data
     };
+    cog_log_debug("Transform component created at position (%f, %f)", position.x, position.y);
     return component;
 }
 
@@ -61,8 +65,16 @@ void set_scale(Component* component, Vector2 scale) {
 }
 
 void transform_cleanup(Component* component) {
+    if (component == NULL) {
+        cog_log_error("Attempted to clean up NULL component");
+        return;
+    }
+
     if (component->type == COMPONENT_TRANSFORM && component->data != NULL) {
-        free(component->data);
+        COG_DELETE(component->data);
         component->data = NULL;
+        cog_log_debug("Transform component cleaned up successfully");
+    } else {
+        cog_log_warning("Attempted to clean up invalid transform component");
     }
 }

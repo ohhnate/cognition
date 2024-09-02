@@ -1,5 +1,7 @@
 #include <stdio.h>
-#include "renderer.h"
+#include "core/modules/graphics/renderer.h"
+#include "core/modules/utils/memory_manager.h"
+#include "core/modules/utils/error_handling.h"
 #include "core/cognition.h"
 #include "render_components.h"
 #include "core/modules/physics/transform_components.h"
@@ -9,9 +11,10 @@
 int renderer_init(Renderer* renderer, SDL_Window* window) {
     renderer->sdl_renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (renderer->sdl_renderer == NULL) {
-        printf("Renderer could not be created! SDL Error: %s\n", SDL_GetError());
+        cog_log_error("Renderer could not be created! SDL Error: %s", SDL_GetError());
         return 0;
     }
+    cog_log_info("Renderer initialized successfully");
     return 1;
 }
 
@@ -32,11 +35,6 @@ void draw_rect(Renderer* renderer, SDL_Rect* rect, SDL_Color color) {
 void draw_line(Renderer* renderer, int x1, int y1, int x2, int y2, SDL_Color color) {
     SDL_SetRenderDrawColor(renderer->sdl_renderer, color.r, color.g, color.b, color.a);
     SDL_RenderDrawLine(renderer->sdl_renderer, x1, y1, x2, y2);
-}
-
-void renderer_cleanup(Renderer* renderer) {
-    SDL_DestroyRenderer(renderer->sdl_renderer);
-    renderer->sdl_renderer = NULL;
 }
 
 void render_entities(Renderer* renderer, ECS* ecs, CognitionEngine* engine) {
@@ -66,4 +64,12 @@ void render_entities(Renderer* renderer, ECS* ecs, CognitionEngine* engine) {
             }
         }
     }
+}
+
+void renderer_cleanup(Renderer* renderer) {
+    if (renderer->sdl_renderer) {
+        SDL_DestroyRenderer(renderer->sdl_renderer);
+        renderer->sdl_renderer = NULL;
+    }
+    cog_log_info("Renderer cleaned up");
 }
