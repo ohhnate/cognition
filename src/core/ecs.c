@@ -61,13 +61,10 @@ ECSResult ecs_update(ECS* ecs, void* user_data) {
     
     for (int s = 0; s < ecs->system_count; s++) {
         System* system = &ecs->systems[s];
-        printf("Updating system %d\n", s);
-        
         for (int e = 0; e < ecs->entity_count; e++) {
             Entity* entity = &ecs->entities[e];
             Component* components[MAX_COMPONENTS];
             int component_count = 0;
-            
             for (int c = 0; c < system->required_component_count; c++) {
                 Component* component;
                 ECSResult result = get_component(ecs, entity, system->required_components[c], &component);
@@ -75,7 +72,6 @@ ECSResult ecs_update(ECS* ecs, void* user_data) {
                     components[component_count++] = component;
                 }
             }
-            
             if (component_count == system->required_component_count) {
                 printf("Running system for entity %d\n", entity->id);
                 system->update(entity, components, component_count, user_data);
