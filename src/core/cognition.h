@@ -2,10 +2,12 @@
 #define COGNITION_H
 
 #include <SDL.h>
-#include "ecs.h"
-#include "modules/input/input_manager.h"
-#include "modules/physics/physics.h"
-#include "modules/resource/resource_manager.h"
+#include "ecs/cog_ecs.h"
+#include "input/cog_input.h"
+#include "physics/cog_physics.h"
+#include "resource/cog_resource.h"
+#include "camera/cog_camera.h"
+#include "audio/cog_audio.h"
 
 typedef struct Renderer Renderer;
 
@@ -16,6 +18,8 @@ typedef struct CognitionEngine {
     InputManager* input_manager;
     PhysicsWorld* physics_world;
     ECS* ecs;
+    Camera camera;
+    AudioSystem* audio_system;
     int is_running;
 } CognitionEngine;
 

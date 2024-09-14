@@ -2,18 +2,21 @@
 #include <stdio.h>
 #include <SDL.h>
 #include <SDL_image.h>
-#include "core/cognition.h"
-#include "core/modules/utils/memory_manager.h"
-#include "core/modules/utils/error_handling.h"
-#include "modules/graphics/renderer.h"
-#include "modules/graphics/render_system.h"
-#include "modules/resource/resource_manager.h"
-#include "modules/input/input_manager.h"
-#include "modules/physics/physics.h"
-#include "modules/physics/transform_system.h"
-#include "modules/physics/physics_system.h"
-#include "modules/physics/physics_components.h"
-#include "modules/graphics/render_components.h"
+#include "cognition.h"
+#include "utils/cog_memory.h"
+#include "utils/cog_error.h"
+#include "ecs/cog_ecs.h"
+#include "resource/cog_resource.h"
+#include "input/cog_input.h"
+#include "graphics/cog_renderer.h"
+#include "graphics/cog_render_system.h"
+#include "graphics/cog_render_components.h"
+#include "physics/cog_physics.h"
+#include "physics/cog_physics_system.h"
+#include "physics/cog_physics_components.h"
+#include "camera/cog_camera.h"
+
+static_assert(sizeof(Component) > 0, "Component type is not properly defined");
 
 static int init_sdl_and_window(CognitionEngine* engine, const char* title, int width, int height) {
     cog_log_info("Initializing SDL and creating window...");
@@ -64,20 +67,47 @@ static int init_renderer(CognitionEngine* engine) {
 static int init_resource_manager(CognitionEngine* engine) {
     cog_log_info("Initializing resource manager...");
 
-    engine->resource_manager = COG_NEW(ResourceManager);
+    engine->resource_manager = resource_manager_create(engine->renderer->sdl_renderer);
     if (!engine->resource_manager) {
-        cog_log_error("Failed to allocate memory for resource manager");
+        cog_log_error("Failed to create resource manager");
         return 0;
     }
+    cog_log_debug("Resource manager created successfully");
 
-    resource_manager_init(engine->resource_manager, engine->renderer->sdl_renderer);
-
-    if (!resource_manager_load_image(engine->resource_manager, "test_sprite", "../assets/test_sprite.png")) {
-        cog_log_error("Failed to load test sprite!");
+    const char* texture_path = "../assets/test_sprite.png";
+    Texture* texture = resource_manager_load_texture(engine->resource_manager, "test_sprite", texture_path);
+    if (!texture) {
+        cog_log_error("Failed to load test sprite from path: %s", texture_path);
         return 0;
     }
+    cog_log_debug("Test sprite loaded successfully from path: %s", texture_path);
+
+    // Verify that the texture can be retrieved
+    if (!resource_manager_get_texture(engine->resource_manager, "test_sprite")) {
+        cog_log_error("Failed to retrieve loaded test sprite");
+        return 0;
+    }
+    cog_log_debug("Test sprite retrieved successfully");
 
     cog_log_info("Resource manager initialized and test sprite loaded successfully.");
+    return 1;
+}
+
+static int init_audio_system(CognitionEngine* engine) {
+    cog_log_info("Initializing audio system...");
+
+    engine->audio_system = COG_NEW(AudioSystem);
+    if (!engine->audio_system) {
+        cog_log_error("Failed to allocate memory for audio system");
+        return 0;
+    }
+
+    if (!audio_system_init(engine->audio_system)) {
+        cog_log_error("Failed to initialize audio system");
+        return 0;
+    }
+
+    cog_log_info("Audio system initialized successfully.");
     return 1;
 }
 
@@ -97,7 +127,6 @@ static int init_subsystems(CognitionEngine* engine) {
         return 0;
     }
     physics_world_init(engine->physics_world);
-
     cog_log_info("Subsystems initialized successfully.");
     return 1;
 }
@@ -111,18 +140,16 @@ static int init_ecs(CognitionEngine* engine) {
         return 0;
     }
 
-    if (ecs_init(engine->ecs) != ECS_OK) {
+    if (cog_ecs_init(engine->ecs) != ECS_OK) {
         cog_log_error("Failed to initialize ECS");
         return 0;
     }
 
-    System transform_sys = {transform_system, {COMPONENT_TRANSFORM}, 1};
-    System physics_sys = {physics_system, {COMPONENT_TRANSFORM, COMPONENT_PHYSICS}, 2};
-    System render_sys = {render_system, {COMPONENT_TRANSFORM, COMPONENT_RENDER}, 2};
+    System physics_sys = {physics_system, {COMPONENT_PHYSICS}, 1};
+    System render_sys = {render_system, {COMPONENT_RENDER}, 1};
 
-    add_system(engine->ecs, transform_sys);
-    add_system(engine->ecs, physics_sys);
-    add_system(engine->ecs, render_sys);
+    cog_add_system(engine->ecs, physics_sys);
+    cog_add_system(engine->ecs, render_sys);
 
     cog_log_info("ECS initialized and systems added successfully.");
     return 1;
@@ -132,39 +159,96 @@ static int create_test_entity(CognitionEngine* engine) {
     cog_log_info("Creating test entity...");
 
     Entity* test_entity = NULL;
-    ECSResult result = create_entity(engine->ecs, &test_entity);
+    ECSResult result = cog_create_entity(engine->ecs, &test_entity);
     if (result != ECS_OK || test_entity == NULL) {
         cog_log_error("Failed to create test entity! Error code: %d", result);
         return 0;
     }
+    cog_log_debug("Test entity created successfully");
 
-    Component transform_component = create_transform_component((Vector2){100, 100}, 0, (Vector2){1, 1});
-    result = add_component(engine->ecs, test_entity, transform_component);
-    if (result != ECS_OK) {
-        cog_log_error("Failed to add transform component! Error code: %d", result);
+    // Set initial transform values
+    transform_set_position(&test_entity->transform, (Vector2){100, 100});
+    transform_set_rotation(&test_entity->transform, 0);
+    transform_set_scale(&test_entity->transform, (Vector2){1, 1});
+    cog_log_debug("Transform set for test entity");
+
+    // Create and add render component
+    Texture* texture = resource_manager_get_texture(engine->resource_manager, "test_sprite");
+    if (!texture) {
+        cog_log_error("Failed to get texture for test entity");
         return 0;
     }
+    cog_log_debug("Texture retrieved successfully");
 
-    Component render_component = create_render_component("test_sprite");
-    result = add_component(engine->ecs, test_entity, render_component);
+    Sprite* sprite = sprite_create(texture);
+    if (!sprite) {
+        cog_log_error("Failed to create sprite for test entity");
+        return 0;
+    }
+    cog_log_debug("Sprite created successfully");
+    
+    Component render_component = create_render_component(sprite, 0, 0);
+    result = cog_add_component(engine->ecs, test_entity, render_component);
     if (result != ECS_OK) {
         cog_log_error("Failed to add render component! Error code: %d", result);
         return 0;
     }
+    cog_log_debug("Render component added successfully");
 
-    cog_log_info("Test entity created successfully with transform and render components.");
+    cog_log_info("Test entity created successfully with transform and render component.");
     return 1;
 }
 
 int cognition_init(CognitionEngine* engine, const char* title, int width, int height) {
     cog_log_info("Initializing Cognition Engine...");
+    
+    if (!init_sdl_and_window(engine, title, width, height)) {
+        cog_log_error("Failed to initialize SDL and window");
+        return 0;
+    }
+    cog_log_info("SDL and window initialized successfully");
 
-    if (!init_sdl_and_window(engine, title, width, height)) return 0;
-    if (!init_renderer(engine)) return 0;
-    if (!init_resource_manager(engine)) return 0;
-    if (!init_subsystems(engine)) return 0;
-    if (!init_ecs(engine)) return 0;
-    if (!create_test_entity(engine)) return 0;
+    if (!init_renderer(engine)) {
+        cog_log_error("Failed to initialize renderer");
+        return 0;
+    }
+    cog_log_info("Renderer initialized successfully");
+
+    renderer_begin_batch(engine->renderer);
+    cog_log_info("Renderer batch begun");
+
+    if (!init_resource_manager(engine)) {
+        cog_log_error("Failed to initialize resource manager");
+        return 0;
+    }
+    cog_log_info("Resource manager initialized successfully");
+
+    if (!init_subsystems(engine)) {
+        cog_log_error("Failed to initialize subsystems");
+        return 0;
+    }
+    cog_log_info("Subsystems initialized successfully");
+
+    if (!init_ecs(engine)) {
+        cog_log_error("Failed to initialize ECS");
+        return 0;
+    }
+    cog_log_info("ECS initialized successfully");
+
+    if (!init_audio_system(engine)) {
+        cog_log_error("Failed to initialize audio system");
+        return 0;
+    }
+    cog_log_info("Audio system initialized successfully");
+
+    if (!create_test_entity(engine)) {
+        cog_log_error("Failed to create test entity");
+        return 0;
+    }
+    cog_log_info("Test entity created successfully");
+   
+    camera_init(&engine->camera, width, height);
+    cog_log_info("Camera initialized");
 
     engine->is_running = 1;
     cog_log_info("Cognition Engine initialized successfully.");
@@ -182,40 +266,59 @@ static void handle_events(CognitionEngine* engine) {
     }
 }
 
-static void update_game_state(CognitionEngine* engine) {
+static void update_game_state(CognitionEngine* engine, float delta_time) {
     input_manager_update(engine->input_manager);
-    
-    ECSResult result = ecs_update(engine->ecs, engine);
-    if (result != ECS_OK) {
-        cog_log_error("ECS update failed with error code: %d", result);
-        engine->is_running = 0;
-    }
+    cog_ecs_update(engine->ecs, engine, delta_time);
 }
 
-static void render_frame(CognitionEngine* engine) {
+static void update_physics(CognitionEngine* engine, float fixed_delta_time) {
+    physics_world_update(engine->physics_world, fixed_delta_time);
+}
+
+void render_frame(CognitionEngine* engine) {
     SDL_Color clear_color = {0, 0, 0, 255}; // Black
     clear(engine->renderer, clear_color);
-
+    
+    camera_apply(&engine->camera, engine->renderer->sdl_renderer);
     render_entities(engine->renderer, engine->ecs, engine);
-
+    camera_revert(&engine->camera, engine->renderer->sdl_renderer);
     present(engine->renderer);
 }
 
 void cognition_run(CognitionEngine* engine) {
-    cog_log_info("Entering main game loop");
     int frame_count = 0;
 
+    Uint64 now = SDL_GetPerformanceCounter();
+    Uint64 last = 0;
+    float delta_time = 0;
+
+    const double FIXED_TIME_STEP = 1.0 / 60.0;  // 60 updates per second
+    double accumulator = 0.0;
+
     while (engine->is_running) {
-        cog_log_debug("Frame %d start", frame_count);
+        last = now;
+        now = SDL_GetPerformanceCounter();
+        
+        delta_time = (float)((now - last) / (double)SDL_GetPerformanceFrequency());
+        accumulator += delta_time;
+
+        // cog_log_debug("Frame %d start", frame_count);
 
         handle_events(engine);
-        update_game_state(engine);
+
+        // Fixed time step update for physics
+        while (accumulator >= FIXED_TIME_STEP) {
+            update_physics(engine, (float)FIXED_TIME_STEP);
+            accumulator -= FIXED_TIME_STEP;
+        }
+
+        update_game_state(engine, delta_time);
+        camera_update(&engine->camera, delta_time);
         render_frame(engine);
 
         frame_count++;
-        SDL_Delay(16);  // Roughly 60 FPS
 
-        cog_log_debug("Frame %d end. is_running: %d", frame_count, engine->is_running);
+        // cog_log_debug("Frame %d end. is_running: %d", frame_count, engine->is_running);
     }
 
     cog_log_info("Exiting main game loop");
@@ -223,7 +326,7 @@ void cognition_run(CognitionEngine* engine) {
 
 static void cleanup_subsystems(CognitionEngine* engine) {
     if (engine->ecs) {
-        ecs_cleanup(engine->ecs);
+        cog_ecs_cleanup(engine->ecs);
         COG_DELETE(engine->ecs);
     }
 
@@ -246,19 +349,24 @@ static void cleanup_subsystems(CognitionEngine* engine) {
         physics_world_cleanup(engine->physics_world);
         COG_DELETE(engine->physics_world);
     }
+
+    if (engine->audio_system) {
+        audio_system_cleanup(engine->audio_system);
+        COG_DELETE(engine->audio_system);
+    }
 }
 
 void cognition_shutdown(CognitionEngine* engine) {
     cog_log_info("Shutting down Cognition Engine...");
-
+    renderer_end_batch(engine->renderer);
     cleanup_subsystems(engine);
-
+    if (engine->resource_manager) {
+        resource_manager_destroy(engine->resource_manager);
+    }
     if (engine->window) {
         SDL_DestroyWindow(engine->window);
     }
-
     IMG_Quit();
     SDL_Quit();
-
     cog_log_info("Cognition Engine shut down successfully.");
 }
